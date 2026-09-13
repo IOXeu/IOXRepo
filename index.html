@@ -1,14 +1,122 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Meu Site IOXeu</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IOXeu Deploy Manager | Automação Real</title>
     <style>
-        body { background-color: #050505; color: #00FF41; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        h1 { font-size: 3em; }
+        /* === ESTILO IOXEU ALTO CONTRASTE & EDUCATIVO === */
+        :root {
+            --bg: #050505;
+            --card: #121212;
+            --neon: #00FF41;
+            --text: #FFFFFF;
+            --dim: #AAAAAA;
+        }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        
+        header { text-align: center; padding: 60px 20px; border-bottom: 2px solid var(--neon); }
+        h1 { font-size: 3rem; color: var(--neon); margin-bottom: 10px; letter-spacing: -1px; }
+        .subtitle { font-size: 1.4rem; color: var(--dim); max-width: 700px; margin: 0 auto; }
+
+        .section { padding: 50px 20px; }
+        .card { 
+            background: var(--card); 
+            border: 1px solid #333; 
+            border-radius: 12px; 
+            padding: 30px; 
+            margin-bottom: 30px;
+        }
+        
+        h2 { color: var(--neon); font-size: 2rem; margin-top: 0; }
+        p { font-size: 1.2rem; color: #ddd; }
+        
+        ul.benefits { list-style: none; padding: 0; }
+        ul.benefits li { 
+            font-size: 1.3rem; 
+            margin-bottom: 15px; 
+            padding-left: 30px; 
+            position: relative; 
+        }
+        ul.benefits li::before {
+            content: "✓";
+            color: var(--neon);
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .cta-box { text-align: center; padding: 60px 20px; background: #0a0a0a; border-top: 1px solid #333; }
+        .btn-buy {
+            display: inline-block;
+            background: var(--neon);
+            color: #000;
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 20px 50px;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: transform 0.2s;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        .btn-buy:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(0, 255, 65, 0.6); }
+        
+        footer { text-align: center; padding: 40px; color: var(--dim); font-size: 0.9rem; border-top: 1px solid #222; }
+
+        /* Acessibilidade Visual */
+        ::selection { background: var(--neon); color: #000; }
     </style>
 </head>
 <body>
-    <h1>SITE IOXEU NO AR! 🚀</h1>
-    <p>O deploy funcionou corretamente.</p>
+
+    <header>
+        <div class="container">
+            <h1>IOXEU DEPLOY MANAGER</h1>
+            <p class="subtitle">Pare de digitar comandos. Automatize seus deploys, organize projetos e publique sites profissionais com apenas dois cliques.</p>
+        </div>
+    </header>
+
+    <div class="container section">
+        <div class="card">
+            <h2>🎓 Por que isso existe?</h2>
+            <p>Desenvolvido por quem entende as limitações físicas do dia a dia. O IOXeu não é só uma ferramenta, é um método educativo para tornar a tecnologia acessível, rápida e livre de dores.</p>
+        </div>
+
+        <div class="card">
+            <h2>🚀 O que você recebe:</h2>
+            <ul class="benefits">
+                <li><strong>Deploy Automático Real:</strong> Cria repositórios, sobe arquivos e ativa GitHub Pages sozinho.</li>
+                <li><strong>Montador de Setup Profissional:</strong> Transforma seus scripts em instaladores .exe prontos para venda.</li>
+                <li><strong>Cofre de Credenciais Criptografado:</strong> Seus tokens e senhas ficam seguros localmente.</li>
+                <li><strong>Interface Alto Contraste:</strong> Pensada para baixa visão e conforto visual extremo.</li>
+                <li><strong>Suporte Educativo Vitalício:</strong> Aprenda a gerenciar projetos sem depender de terminais complexos.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="cta-box">
+        <div class="container">
+            <h2>Pronto para automatizar sua vida?</h2>
+            <p style="margin-bottom: 40px;">Adquira agora e receba o instalador + guia de uso imediato.</p>
+            <!-- SUBSTITUA O LINK ABAIXO PELO SEU LINK DA KIWIFY/HOTMART/GITHUB RELEASES -->
+            <a href="#" class="btn-buy">COMPRAR AGORA - R$ 47,00</a>
+            <p style="margin-top: 20px; font-size: 0.9rem; color: var(--dim);">Pagamento seguro • Download instantâneo • Garantia de 7 dias</p>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2026 IOXeu Project. Desenvolvido com propósito por Luis.</p>
+        <p>Contato: projetos.ideias@hotmail.com</p>
+    </footer>
+
 </body>
 </html>
