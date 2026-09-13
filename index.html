@@ -1,227 +1,319 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IOXeu Deploy Manager | Automação Enterprise para Devs</title>
-    <style>
-        :root {
-            --bg: #050505;
-            --card: #121212;
-            --neon: #00FF41;
-            --text: #FFFFFF;
-            --dim: #AAAAAA;
-            --border: #333333;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); line-height: 1.6; }
+import customtkinter as ctk
+import json
+import os
+import requests
+import subprocess
+import shutil
+import threading
+from cryptography.fernet import Fernet
+from tkinter import filedialog
+
+# === CONFIGURAÇÃO VISUAL IOXEU (ALTO CONTRASTE & ACESSÍVEL) ===
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("green")
+
+CORES = {
+    "bg": "#050505", "card": "#121212", "neon": "#00FF41",
+    "text": "#FFFFFF", "dim": "#AAAAAA", "border": "#333333",
+    "input_bg": "#1A1A1A", "terminal_bg": "#000000"
+}
+
+class IOXeuDeployManager(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("IOXEU DEPLOY MANAGER v3.0 [FINAL ENGINE]")
+        self.geometry("1400x900")
+        self.configure(fg_color=CORES["bg"])
         
-        /* Tipografia e Utilitários */
-        h1, h2, h3 { font-weight: 800; letter-spacing: -0.5px; }
-        .mono { font-family: 'Consolas', monospace; }
-        .neon-text { color: var(--neon); }
-        .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
-        .btn { 
-            display: inline-block; padding: 14px 28px; background: var(--neon); color: #000; 
-            text-decoration: none; font-weight: bold; border-radius: 4px; transition: 0.2s; 
-            border: none; cursor: pointer; font-size: 1rem;
-        }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 0 15px rgba(0,255,65,0.4); }
-        .btn-outline { background: transparent; border: 2px solid var(--neon); color: var(--neon); }
-        .btn-outline:hover { background: rgba(0,255,65,0.1); }
-
-        /* Header & Hero */
-        header { padding: 20px 0; border-bottom: 1px solid var(--border); }
-        nav { display: flex; justify-content: space-between; align-items: center; }
-        .logo { font-size: 1.5rem; font-weight: 900; letter-spacing: 1px; }
+        # Segurança e Credenciais
+        self.key_file = "ioxeu_master_key.bin"
+        self.creds_file = "luis_accounts.json"
+        self.init_security()
+        self.load_credentials()
         
-        .hero { padding: 80px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
-        .hero h1 { font-size: 3.5rem; line-height: 1.1; margin-bottom: 20px; }
-        .hero p { font-size: 1.2rem; color: var(--dim); margin-bottom: 30px; }
+        # Layout Grid
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(1, weight=1)
         
-        /* Terminal Simulado */
-        .terminal-window { 
-            background: #000; border: 1px solid var(--border); border-radius: 8px; 
-            padding: 20px; font-size: 0.9rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .terminal-header { display: flex; gap: 6px; margin-bottom: 15px; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
-        .dot.red { background: #ff5f56; } .dot.yellow { background: #ffbd2e; } .dot.green { background: #27c93f; }
-        .cmd-line { margin-bottom: 5px; opacity: 0; animation: typeIn 0.5s forwards; }
-        @keyframes typeIn { to { opacity: 1; } }
+        self.create_header()
+        self.create_sidebar()
+        self.create_main_area()
+        self.check_first_run()
 
-        /* Seções Informativas */
-        section { padding: 80px 0; border-top: 1px solid var(--border); }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-top: 40px; }
-        .card { 
-            background: var(--card); border: 1px solid var(--border); padding: 30px; 
-            border-radius: 8px; transition: 0.3s; 
-        }
-        .card:hover { border-color: var(--neon); }
-        .card h3 { margin-bottom: 15px; color: var(--neon); }
+    # --- SEGURANÇA E DADOS ---
+    def init_security(self):
+        if not os.path.exists(self.key_file):
+            with open(self.key_file, 'wb') as f: 
+                f.write(Fernet.generate_key())
+        with open(self.key_file, 'rb') as f: 
+            self.cipher = Fernet(f.read())
 
-        /* Preços */
-        .price-card { text-align: center; padding: 40px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
-        .price-card.featured { border-color: var(--neon); position: relative; }
-        .price { font-size: 3rem; font-weight: 900; margin: 20px 0; }
-        .features-list { list-style: none; text-align: left; margin: 30px 0; }
-        .features-list li { padding: 10px 0; border-bottom: 1px solid #222; color: var(--dim); }
-        .features-list li::before { content: "✓ "; color: var(--neon); font-weight: bold; }
+    def load_credentials(self):
+        try:
+            with open(self.creds_file, 'r') as f:
+                self.credentials = json.loads(self.cipher.decrypt(f.read().encode()).decode())
+        except: 
+            self.credentials = {"git": [{} for _ in range(4)], "cloud": [{} for _ in range(4)]}
 
-        footer { padding: 40px 0; text-align: center; color: var(--dim); border-top: 1px solid var(--border); margin-top: 80px; }
+    def save_credentials(self):
+        with open(self.creds_file, 'wb') as f: 
+            f.write(self.cipher.encrypt(json.dumps(self.credentials).encode()))
 
-        @media (max-width: 768px) {
-            .hero { grid-template-columns: 1fr; text-align: center; }
-            .hero h1 { font-size: 2.5rem; }
-        }
-    </style>
-</head>
+    # --- INTERFACE PRINCIPAL ---
+    def create_header(self):
+        h = ctk.CTkFrame(self, height=70, fg_color=CORES["card"], border_width=1, border_color=CORES["border"])
+        h.grid(row=0, column=0, columnspan=2, sticky="ew")
+        ctk.CTkLabel(h, text=" IOXEU DEPLOY MANAGER", font=("Inter Black", 28, "bold"), text_color=CORES["neon"]).pack(side="left", padx=30, pady=15)
+        ctk.CTkLabel(h, text="ENTERPRISE ORCHESTRATOR // REAL GIT.PAGE ENGINE", font=("Consolas", 14), text_color=CORES["dim"]).pack(side="left", padx=(0,30))
+
+    def create_sidebar(self):
+        sf = ctk.CTkFrame(self, width=320, fg_color=CORES["card"], border_width=1, border_color=CORES["border"])
+        sf.grid(row=1, column=0, sticky="nsew")
+        
+        ctk.CTkLabel(sf, text="CREDENTIAL VAULT", font=("Inter Black", 16, "bold")).pack(pady=(20,15), padx=20, anchor="w")
+        
+        tv = ctk.CTkTabview(sf, width=280, height=700, fg_color=CORES["card"], segmented_control_fg_color=CORES["border"])
+        tv.pack(padx=20, pady=10, fill="both", expand=True)
+        
+        git_tab = tv.add("GIT PROVIDERS")
+        cloud_tab = tv.add("CLOUD HOSTS")
+        
+        self._create_cred_inputs(git_tab, "git")
+        self._create_cred_inputs(cloud_tab, "cloud")
+
+    def _create_cred_inputs(self, tab, cred_type):
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        for i in range(4):
+            frame = ctk.CTkFrame(scroll, fg_color=CORES["input_bg"], corner_radius=8, border_width=1, border_color=CORES["border"])
+            frame.pack(fill="x", pady=8, padx=5)
+            
+            ctk.CTkLabel(frame, text=f"SLOT #{i+1}", font=("Consolas", 12, "bold"), text_color=CORES["neon"]).pack(anchor="w", padx=15, pady=(10,5))
+            
+            name_e = ctk.CTkEntry(frame, placeholder_text="Provider Name", fg_color=CORES["terminal_bg"], text_color=CORES["text"], height=35)
+            name_e.pack(fill="x", padx=15, pady=5)
+            if self.credentials[cred_type][i].get("name"): name_e.insert(0, self.credentials[cred_type][i]["name"])
+            
+            token_e = ctk.CTkEntry(frame, placeholder_text="API Token / PAT", show="*", fg_color=CORES["terminal_bg"], text_color=CORES["text"], height=35)
+            token_e.pack(fill="x", padx=15, pady=5)
+            
+            def save(idx=i, t=cred_type, n=name_e, tk=token_e):
+                self.credentials[t][idx] = {"name": n.get(), "token": tk.get()}
+                self.save_credentials()
+                self.log(f"[OK] Credential {t.upper()} #{idx+1} encrypted locally.")
+            
+            ctk.CTkButton(frame, text="ENCRYPT & SAVE", height=35, fg_color=CORES["neon"], text_color="#000", command=save).pack(fill="x", padx=15, pady=(5,10))
+
+    def create_main_area(self):
+        mf = ctk.CTkFrame(self, fg_color=CORES["bg"])
+        mf.grid(row=1, column=1, sticky="nsew", padx=20, pady=20)
+        mf.grid_columnconfigure((0,1), weight=1)
+        mf.grid_rowconfigure((0,1), weight=1)
+        
+        # Drop Zone
+        dz = ctk.CTkFrame(mf, height=200, fg_color=CORES["card"], border_width=3, border_color=CORES["neon"], corner_radius=12)
+        dz.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        ctk.CTkLabel(dz, text="📂 DRAG PROJECT FOLDER HERE\n(Or click to select)", font=("Inter Black", 18, "bold")).pack(expand=True)
+        dz.bind("<Button-1>", lambda e: self.select_folder())
+        
+        # Botões de Ação Principal
+        btn_frame = ctk.CTkFrame(mf, fg_color="transparent", height=60)
+        btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0,10))
+        
+        self.deploy_btn = ctk.CTkButton(btn_frame, text="DEPLOY TO GIT.PAGE (REAL)", height=45, fg_color=CORES["neon"], text_color="#000", font=("Inter", 14, "bold"), command=self.start_deploy)
+        self.deploy_btn.pack(side="left", padx=10, fill="x", expand=True)
+        
+        # Botão para Montador de Setup (Novidade)
+        setup_btn = ctk.CTkButton(btn_frame, text="PREPARE PROFESSIONAL SETUP", height=45, fg_color="transparent", border_width=2, border_color=CORES["neon"], text_color=CORES["neon"], hover_color=CORES["card"], command=self.prepare_setup)
+        setup_btn.pack(side="right", padx=10, fill="x", expand=True)
+
+        # Terminals
+        self.terminals = {}
+        configs = [("SYSTEM LOG", 2, 0), ("GIT LOG", 2, 1), ("CLOUD LOG", 3, 0), ("CODE PREVIEW", 3, 1)]
+        for title, r, c in configs:
+            f = ctk.CTkFrame(mf, fg_color=CORES["terminal_bg"], border_width=1, border_color=CORES["border"])
+            f.grid(row=r, column=c, sticky="nsew", padx=5, pady=5)
+            f.grid_rowconfigure(1, weight=1); f.grid_columnconfigure(0, weight=1)
+            
+            ctk.CTkLabel(f, text=title, font=("Consolas", 12, "bold"), text_color=CORES["neon"], anchor="w").grid(row=0, column=0, sticky="ew", padx=10, pady=5)
+            txt = ctk.CTkTextbox(f, font=("Consolas", 12), fg_color="transparent", text_color="#FFF")
+            txt.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0,10))
+            self.terminals[title] = txt
+            
+        self.log("[INIT] IOXEU DEPLOY MANAGER v3.0 READY")
+        self.log("[ENGINE] Real Git + GitHub Pages API loaded")
+
+    def log(self, msg):
+        if "SYSTEM LOG" in self.terminals:
+            self.terminals["SYSTEM LOG"].insert("end", f"> {msg}\n")
+            self.terminals["SYSTEM LOG"].see("end")
+
+    # --- LÓGICA DE SELEÇÃO DE PASTA ---
+    def select_folder(self):
+        folder = filedialog.askdirectory(title="Select Project Folder")
+        if folder:
+            self.selected_folder = folder
+            self.log(f"[SCAN] Project selected: {os.path.basename(folder)}")
+            self.log(f"[PATH] {folder}")
+
+    # --- MOTOR DE DEPLOY REAL ---
+    def start_deploy(self):
+        if not hasattr(self, 'selected_folder'):
+            self.log("[ERROR] No project folder selected! Click the drop zone first.")
+            return
+        threading.Thread(target=self._deploy_logic, daemon=True).start()
+
+    def _deploy_logic(self):
+        try:
+            # 1. Pegar credencial ativa (Slot #1 do Git)
+            git_token = self.credentials["git"][0].get("token", "")
+            git_name = self.credentials["git"][0].get("name", "GitHub")
+            
+            if not git_token:
+                self.log("[ERROR] No active Git credential found in Slot #1!")
+                return
+
+            self.log(f"[AUTH] Connected to {git_name}")
+            
+            # 2. Preparar estrutura
+            project_name = os.path.basename(self.selected_folder)
+            deploy_dir = os.path.join(os.path.expanduser("~"), "Desktop", f"ioxeu-deploy-{project_name}")
+            
+            self.log(f"[BUILD] Creating deploy structure at: {deploy_dir}")
+            if os.path.exists(deploy_dir):
+                shutil.rmtree(deploy_dir)
+            shutil.copytree(self.selected_folder, deploy_dir)
+            
+            # Criar index.html básico se não existir (para GitHub Pages funcionar)
+            index_path = os.path.join(deploy_dir, "index.html")
+            if not os.path.exists(index_path):
+                with open(index_path, 'w', encoding='utf-8') as f:
+                    f.write(f"""<!DOCTYPE html>
+<html>
+<head><title>{project_name}</title></head>
 <body>
-
-<header>
-    <div class="container">
-        <nav>
-            <div class="logo mono"><span class="neon-text">IOX</span>EU</div>
-            <div>
-                <a href="#funcionalidades" style="color:var(--dim); text-decoration:none; margin-right:20px;">Funcionalidades</a>
-                <a href="#precos" style="color:var(--dim); text-decoration:none;">Preços</a>
-            </div>
-        </nav>
-    </div>
-</header>
-
-<main>
-    <!-- HERO SECTION -->
-    <section class="hero container">
-        <div>
-            <h1>Deploy Automático.<br><span class="neon-text">Zero Configuração.</span></h1>
-            <p>Gerencie Git, GitHub Pages e Cloudflare em 3 cliques. Ferramenta enterprise para devs que odeiam perder tempo com setup manual.</p>
-            <div style="display:flex; gap:15px; flex-wrap:wrap;">
-                <a href="#" class="btn">BAIXAR IOXEU DEPLOY MANAGER</a>
-                <a href="#tutorial" class="btn btn-outline">VER TUTORIAL</a>
-            </div>
-            <p style="font-size:0.8rem; margin-top:15px; color:#666;">✓ Criptografia Local Fernet ✓ Suporte a git.page & page.dev ✓ Ghost Tester Integrado</p>
-        </div>
-        
-        <!-- TERMINAL ANIMADO -->
-        <div class="terminal-window mono">
-            <div class="terminal-header">
-                <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
-            </div>
-            <div id="terminal-content">
-                <div class="cmd-line" style="animation-delay:0.2s">> ioxeu_deploy_manager.exe --init</div>
-                <div class="cmd-line" style="animation-delay:0.8s">[OK] Credential Vault loaded successfully</div>
-                <div class="cmd-line" style="animation-delay:1.4s">[SCAN] Project detected: netsentinela-scanner</div>
-                <div class="cmd-line" style="animation-delay:2.0s">[DEPLOY] Pushing to origin/main... 100%</div>
-                <div class="cmd-line neon-text" style="animation-delay:2.6s">✅ LIVE: https://ioxeu-net.github.io/netsentinela-scanner</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- FUNCIONALIDADES (INFORMAÇÃO VENDE) -->
-    <section id="funcionalidades" class="container">
-        <h2 style="text-align:center; margin-bottom:10px;">Por que o IOXeu?</h2>
-        <p style="text-align:center; color:var(--dim); max-width:600px; margin:0 auto;">Não vendemos promessas. Vendemos automação técnica comprovada.</p>
-        
-        <div class="grid-3">
-            <div class="card">
-                <h3> Segurança Real</h3>
-                <p>Tokens e chaves API são criptografados localmente com Fernet. Nada sai do seu PC sem sua autorização explícita.</p>
-            </div>
-            <div class="card">
-                <h3>⚡ Deploy em Segundos</h3>
-                <p>Arraste a pasta, escolha o provider (GitHub ou Cloudflare) e tenha seu site no ar. Sem CLI, sem YAML complexo.</p>
-            </div>
-            <div class="card">
-                <h3>🧪 Ghost Tester</h3>
-                <p>Teste seu código com personas humanas simuladas (Leigo, Gamer, Idoso) antes de publicar. Evite bugs em produção.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- TUTORIAL VISUAL -->
-    <section id="tutorial" class="container">
-        <h2 style="margin-bottom:30px;">Como Usar (3 Passos)</h2>
-        <div class="grid-3">
-            <div class="card">
-                <h3>1. Configure Credenciais</h3>
-                <p>Abra o IOXeu, vá na aba lateral e salve seus tokens Git/Cloud. Eles são criptografados instantaneamente.</p>
-            </div>
-            <div class="card">
-                <h3>2. Arraste o Projeto</h3>
-                <p>Solte sua pasta de projeto na área central. O sistema detecta automaticamente se é Python, C#, JS ou HTML.</p>
-            </div>
-            <div class="card">
-                <h3>3. Publique</h3>
-                <p>Clique em "Deploy". Escolha entre git.page ou page.dev. Receba o link live em menos de 1 minuto.</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- PREÇOS -->
-    <section id="precos" class="container">
-        <h2 style="text-align:center; margin-bottom:40px;">Planos Transparentes</h2>
-        <div class="grid-3">
-            <div class="price-card">
-                <h3>IOXeu Core</h3>
-                <div class="price">R$ 97</div>
-                <p>Licença Vitalícia</p>
-                <ul class="features-list">
-                    <li>Deploy Ilimitado Git/Pages</li>
-                    <li>Criptografia Local</li>
-                    <li>Suporte por Email</li>
-                    <li>Atualizações 1 ano</li>
-                </ul>
-                <a href="#" class="btn btn-outline" style="width:100%">COMPRAR CORE</a>
-            </div>
-            
-            <div class="price-card featured">
-                <div style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--neon); color:#000; padding:4px 12px; font-size:0.8rem; font-weight:bold; border-radius:10px;">MAIS VENDIDO</div>
-                <h3>IOXeu Pro + Ghost</h3>
-                <div class="price">R$ 147</div>
-                <p>Licença Vitalícia</p>
-                <ul class="features-list">
-                    <li>Tudo do Core</li>
-                    <li>Ghost Tester Completo (5 Personas)</li>
-                    <li>Relatórios HTML de Teste</li>
-                    <li>Atualizações Vitalícias</li>
-                    <li>Suporte Prioritário</li>
-                </ul>
-                <a href="#" class="btn" style="width:100%">COMPRAR PRO</a>
-            </div>
-            
-            <div class="price-card">
-                <h3>Equipe / Agency</h3>
-                <div class="price">R$ 297</div>
-                <p>Até 5 Desenvolvedores</p>
-                <ul class="features-list">
-                    <li>Licenças Múltiplas</li>
-                    <li>Dashboard Centralizado</li>
-                    <li>White Label Disponível</li>
-                    <li>Onboarding Assistido</li>
-                </ul>
-                <a href="#" class="btn btn-outline" style="width:100%">CONTATAR VENDAS</a>
-            </div>
-        </div>
-    </section>
-</main>
-
-<footer>
-    <div class="container">
-        <p class="mono">IOXEU DEPLOY MANAGER v1.0 • ENTERPRISE MULTI-CLOUD ORCHESTRATOR</p>
-        <p style="font-size:0.8rem; margin-top:10px;">© 2026 IOXeu Technology. Todos os direitos reservados.</p>
-    </div>
-</footer>
-
-<script>
-    // Re-trigger terminal animation on scroll/load for effect
-    const lines = document.querySelectorAll('.cmd-line');
-    lines.forEach(line => {
-        line.style.animation = 'none';
-        line.offsetHeight; /* trigger reflow */
-        line.style.animation = null; 
-    });
-</script>
-
+<h1>{project_name}</h1>
+<p>Deployed by IOXEu Deploy Manager</p>
 </body>
-</html>
+</html>""")
+                self.log("[FIX] Generated default index.html for GitHub Pages")
+
+            # 3. Git Init + Commit
+            self.log("[GIT] Initializing repository...")
+            os.chdir(deploy_dir)
+            subprocess.run(["git", "init"], capture_output=True, check=True)
+            subprocess.run(["git", "add", "."], capture_output=True, check=True)
+            subprocess.run(["git", "commit", "-m", f"ioxeu-deploy: {project_name}"], capture_output=True, check=True)
+            subprocess.run(["git", "branch", "-M", "main"], capture_output=True, check=True)
+            self.log("[GIT] Local repository ready")
+
+            # 4. Criar Repo Remoto via API
+            self.log("[API] Creating remote repository...")
+            headers = {
+                "Authorization": f"token {git_token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            repo_payload = {"name": f"ioxeu-{project_name.lower().replace(' ', '-')}", "private": False}
+            resp = requests.post("https://api.github.com/user/repos", json=repo_payload, headers=headers)
+            
+            if resp.status_code == 201:
+                repo_data = resp.json()
+                owner = repo_data["owner"]["login"]
+                repo_name = repo_data["name"]
+                self.log(f"[API] Repository created: {owner}/{repo_name}")
+                
+                # 5. Push Real
+                remote_url = f"https://{git_token}@github.com/{owner}/{repo_name}.git"
+                self.log("[PUSH] Uploading files to GitHub...")
+                push_result = subprocess.run(["git", "push", "-u", "origin", "main"], capture_output=True, text=True)
+                
+                if push_result.returncode == 0:
+                    self.log("[PUSH] Upload successful!")
+                    
+                    # 6. Ativar GitHub Pages via API
+                    self.log("[PAGES] Enabling GitHub Pages automatically...")
+                    pages_payload = {"source": {"branch": "main", "path": "/"}}
+                    pages_resp = requests.post(
+                        f"https://api.github.com/repos/{owner}/{repo_name}/pages",
+                        json=pages_payload, headers=headers
+                    )
+                    
+                    if pages_resp.status_code in [201, 409]:  # 409 = já estava ativo
+                        live_url = f"https://{owner}.github.io/{repo_name}/"
+                        self.log(f"[SUCCESS] 🚀 LIVE: {live_url}")
+                        self.log("[DONE] Deployment finished successfully!")
+                    else:
+                        self.log(f"[WARN] Pages activation returned {pages_resp.status_code}. Check repo settings manually.")
+                        self.log(f"[INFO] URL should be: https://{owner}.github.io/{repo_name}/")
+                else:
+                    self.log(f"[ERROR] Push failed: {push_result.stderr}")
+            else:
+                self.log(f"[ERROR] API Error {resp.status_code}: {resp.json().get('message')}")
+                
+        except Exception as e:
+            self.log(f"[FATAL] {str(e)}")
+            import traceback
+            self.log(traceback.format_exc())
+
+    # --- MONTADOR DE SETUP PROFISSIONAL ---
+    def prepare_setup(self):
+        if not hasattr(self, 'selected_folder'):
+            self.log("[ERROR] No project folder selected!")
+            return
+        
+        self.log("[SETUP] Preparing professional installer structure...")
+        project_name = os.path.basename(self.selected_folder)
+        setup_dir = os.path.join(os.path.expanduser("~"), "Desktop", f"{project_name}-SETUP-PACK")
+        
+        if os.path.exists(setup_dir):
+            shutil.rmtree(setup_dir)
+        os.makedirs(setup_dir)
+        
+        # Copiar arquivos do projeto
+        dest_project = os.path.join(setup_dir, "APP_FILES")
+        shutil.copytree(self.selected_folder, dest_project)
+        
+        # Criar script de instalação simples (batch para Windows)
+        installer_script = os.path.join(setup_dir, "INSTALL.bat")
+        with open(installer_script, 'w') as f:
+            f.write(f"""@echo off
+echo ==========================================
+echo INSTALLING {project_name.upper()}
+echo ==========================================
+mkdir "%USERPROFILE%\\Documents\\{project_name}"
+xcopy "APP_FILES\\*" "%USERPROFILE%\\Documents\\{project_name}\\*" /E /Y
+echo.
+echo Installation Complete!
+echo You can find your app in Documents\\{project_name}
+pause
+""")
+        
+        self.log(f"[SETUP] Professional package created at: {setup_dir}")
+        self.log("[SETUP] Ready for distribution or further packaging.")
+
+    # --- TUTORIAL INTEGRADO ---
+    def check_first_run(self):
+        if not os.path.exists("ioxeu_tutorial_done.flag"):
+            self.after(500, self.show_tutorial)
+
+    def show_tutorial(self):
+        overlay = ctk.CTkToplevel(self)
+        overlay.title("Welcome to IOXeu")
+        overlay.geometry("600x400")
+        overlay.configure(fg_color="#000000E6")
+        overlay.transient(self)
+        overlay.grab_set()
+        
+        ctk.CTkLabel(overlay, text="WELCOME TO IOXEU DEPLOY MANAGER", font=("Inter Black", 24), text_color=CORES["neon"]).pack(pady=(40,20))
+        ctk.CTkLabel(overlay, text="1. Save your Git Token in the left sidebar\n2. Click the drop zone to select your project\n3. Choose DEPLOY or SETUP", font=("Consolas", 14), text_color=CORES["text"], justify="left").pack(padx=40)
+        
+        def close_tut():
+            open("ioxeu_tutorial_done.flag", "w").close()
+            overlay.destroy()
+            
+        ctk.CTkButton(overlay, text="GET STARTED", fg_color=CORES["neon"], text_color="#000", command=close_tut).pack(pady=40)
+
+if __name__ == "__main__":
+    app = IOXeuDeployManager()
+    app.mainloop()
